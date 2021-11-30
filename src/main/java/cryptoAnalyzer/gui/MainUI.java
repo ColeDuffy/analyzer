@@ -7,9 +7,15 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Vector;
 
@@ -18,6 +24,9 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFormattedTextField.AbstractFormatter;
+
+import com.google.gson.JsonObject;
+
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -27,9 +36,12 @@ import javax.swing.JTextArea;
 import org.jdatepicker.impl.JDatePanelImpl;
 import org.jdatepicker.impl.JDatePickerImpl;
 import org.jdatepicker.impl.UtilDateModel;
+import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.data.time.TimeSeriesCollection;
 
 import cryptoAnalyzer.utils.AvailableCryptoList;
 import cryptoAnalyzer.utils.DataVisualizationCreator;
+import cryptoAnalyzer.utils.PercentPrice;
 
 public class MainUI extends JFrame implements ActionListener{
 	/**
@@ -42,9 +54,12 @@ public class MainUI extends JFrame implements ActionListener{
 	
 	// Should be a reference to a separate object in actual implementation
 	private List<String> selectedList;
+	private List<String> dateList;
 	
 	private JTextArea selectedCryptoList;
 	private JComboBox<String> cryptoList;
+	private JComboBox<String> analysisList;
+	private UtilDateModel dateModel;
 
 	public static MainUI getInstance() {
 		if (instance == null)
@@ -60,10 +75,15 @@ public class MainUI extends JFrame implements ActionListener{
 
 		// Set top bar
 		JLabel chooseCountryLabel = new JLabel("Choose a cryptocurrency: ");
+		
+		//gathers crypto list 
 		String[] cryptoNames = AvailableCryptoList.getInstance().getAvailableCryptos();
 		cryptoList = new JComboBox<String>(cryptoNames);
+		String[] analysisNames = {"volume","price"};
+		analysisList = new JComboBox<String>(analysisNames);
 		
 		selectedList = new ArrayList<>();
+		dateList = new ArrayList<>();
 		
 		JButton addCrypto = new JButton("+");
 		addCrypto.setActionCommand("add");
@@ -72,17 +92,25 @@ public class MainUI extends JFrame implements ActionListener{
 		JButton removeCrypto = new JButton("-");
 		removeCrypto.setActionCommand("remove");
 		removeCrypto.addActionListener(this);
+
+		JButton selectAnalysis = new JButton("select");
+		selectAnalysis.setActionCommand("select");
+		selectAnalysis.addActionListener(this);
 		
+
+
 		JPanel north = new JPanel();
 		north.add(chooseCountryLabel);
 		north.add(cryptoList);
 		north.add(addCrypto);
 		north.add(removeCrypto);
+		north.add(analysisList);
+		north.add(selectAnalysis);
 		
 
 		// Set bottom bar
 		JLabel from = new JLabel("From");
-		UtilDateModel dateModel = new UtilDateModel();
+		dateModel = new UtilDateModel();
 		Properties p = new Properties();
 		p.put("text.today", "Today");
 		p.put("text.month", "Month");
@@ -109,6 +137,7 @@ public class MainUI extends JFrame implements ActionListener{
 		        return "";
 		    }
 		});
+		
 		
 		JButton refresh = new JButton("Refresh");
 		refresh.setActionCommand("refresh");
@@ -172,7 +201,16 @@ public class MainUI extends JFrame implements ActionListener{
 		stats.revalidate();
 	}
 
-	
+	public static LocalDate getDate(UtilDateModel dateModel){
+		String date = dateModel.getValue().toString();
+		String month = date.substring(4, 8);
+		String day = date.substring(8, 11);
+		String year = date.substring(24,28);
+		String formattedDate = day.concat(month).concat(year);
+		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
+		LocalDate dateTime = LocalDate.parse(formattedDate, formatter);
+		return dateTime;
+	}
 
 	public static void main(String[] args) {
 		JFrame frame = MainUI.getInstance();
@@ -181,13 +219,44 @@ public class MainUI extends JFrame implements ActionListener{
 		frame.setVisible(true);
 	}
 
+
+	public static ArrayList<ArrayList<ArrayList<String>>> getTable(LocalDate date,String Analysis, ArrayList<String> selectedList){
+			PercentPrice analysis = new PercentPrice(date,LocalDate.now(),selectedList);
+			ArrayList<ArrayList<ArrayList<String>>> out = analysis.getTableData();
+			return out;
+			
+
+	}
+	public static TimeSeriesCollection getTimeSeries(LocalDate date,String Analysis, ArrayList<String> selectedList){
+		PercentPrice analysis = new PercentPrice(date,LocalDate.now(),selectedList);
+		TimeSeriesCollection out = analysis.createTimeSeries();
+		return out;
+		
+
+}
+
+public static DefaultCategoryDataset getDataBar(LocalDate date,String Analysis, ArrayList<String> selectedList){
+	PercentPrice analysis = new PercentPrice(date,LocalDate.now(),selectedList);
+	DefaultCategoryDataset out = analysis.createBarGraph();
+	return out;
+	
+
+}
+
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		String command = e.getActionCommand();
 		if ("refresh".equals(command)) {
-			stats.removeAll();
+
+			
+			LocalDate date = getDate(dateModel);
 			DataVisualizationCreator creator = new DataVisualizationCreator();
-			creator.createCharts();
+			ArrayList<ArrayList<ArrayList<String>>> table = getTable(date, "test", (ArrayList<String>) selectedList);
+			TimeSeriesCollection series = getTimeSeries(date, "test", (ArrayList<String>) selectedList);
+			DefaultCategoryDataset dataBar = getDataBar(date, "test", (ArrayList<String>) selectedList);
+			creator.createCharts(table,series,dataBar);
+
+
 		} else if ("add".equals(command)) {
 			selectedList.add(cryptoList.getSelectedItem().toString());
 			String text = "";
